@@ -84,7 +84,6 @@ def get_product_by_id(id:int):  # Obté un producte específic per la seva ID
     finally:
         conn.close()
     return data
-
 def get_all_products():  # Obté tots els productes de la base de dades
     try:
         conn = clientPS.client()
