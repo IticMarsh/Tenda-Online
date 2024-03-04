@@ -8,7 +8,7 @@ def consulta():
         cur.execute("SELECT * FROM product")
         data = cur.fetchone()
     except Exception as e:
-        print(f"error de conexió: {e}")
+        print(f"Failed to connect: {e}")
         return None
     finally:
         conn.close()
@@ -30,7 +30,7 @@ def insert(prod):
         conn.commit()
        
     except Exception as e:
-        print(f"Error de conexión: {e}")
+        print(f"Failed to connect: {e}")
 
         return None
     finally:
@@ -61,7 +61,7 @@ def update_product(product_id, prod):
         conn.close()
         return True
     except Exception as e:
-        print(f"error de conexión: {e}")
+        print(f"Failed to connect: {e}")
         return False
 
 def delete_product(product_id):
@@ -73,7 +73,7 @@ def delete_product(product_id):
         conn.close()
         return True
     except Exception as e:
-        print(f"error de conexión: {e}")
+        print(f"Failed to connect: {e}")
         return False
 
 def get_product_by_id(id:int):
@@ -84,7 +84,7 @@ def get_product_by_id(id:int):
         data = cur.fetchone()
 
     except Exception as e:
-                print(f"error de conexión: {e}")
+                print(f"Failed to connect: {e}")
 
     finally:
          conn.close()
@@ -101,7 +101,7 @@ def get_all_products():
         
         
     except Exception as e:
-        print(f"error de conexió: {e}")
+        print(f"Failed to connect: {e}")
         return None
     finally:
         
@@ -112,20 +112,54 @@ def get_all_products():
         
 # PART 2 LLEGIR I TRACTAR CSV
 
-def load (file):
-     #llegir fitxer
-     dadesCSV = pd.read_csv(file.file, header=0)
-     for index, row in dadesCSV.iterrows():
-          #per cada fila passem a un diccionari
-          fila=row.to_dict()
-          #per cada entitat agafem els seus valors
-          getCategory(fila["id_categoria"], fila["nom_categoria"])
-          getSubCategory(fila["id_subcategoria"], fila["nom_subcategoria"])
+#Funció principal
+def load(file):
+    try:
+        conn = clientPS.client()
+        dadesCSV = pd.read_csv(file.file, header=0)
+
+        with conn.cursor() as cur:
+            for index, row in dadesCSV.iterrows():
+                fila = row.to_dict()
+                category_id = get_or_create_category(conn, fila["id_categoria"], fila["nom_categoria"])
+                subcategory_id = get_or_create_subcategory(conn, fila["id_subcategoria"], fila["nom_subcategoria"], fila["id_categoria"])
+                product_id = get_or_update_product(conn, fila["id_producto"], fila["nom_producto"], fila["descripcion_producto"], fila["companyia"], fila["precio"], fila["unidades"], subcategory_id)
+
+        conn.commit()
+        return {"message": "CSV imported succesfully"}
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}
+    finally:
+        conn.close()
+#funcions per categories i subcategories
+def get_or_create_category(conn, id, name):
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM category WHERE category_id = %s", (id,))
+    existing_category = cur.fetchone()
+    if existing_category:
+        cur.execute("UPDATE category SET name = %s, updated_at = CURRENT_TIMESTAMP WHERE category_id = %s", (name, id))
+    else:
+        cur.execute("INSERT INTO category(category_id, name, created_at, updated_at) VALUES (%s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", (id, name))
+    return id
 
 
-def getCategory(id, name):
-     print( f"id: {id} i la categoria: {name}")
+def get_or_create_subcategory(conn, id, name, category_id):
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM subcategory WHERE subcategory_id = %s", (id,))
+    existing_subcategory = cur.fetchone()
+    if existing_subcategory:
+        cur.execute("UPDATE subcategory SET name = %s, category_id = %s, updated_at = CURRENT_TIMESTAMP WHERE subcategory_id = %s", (name, category_id, id))
+    else:
+        cur.execute("INSERT INTO subcategory(subcategory_id, name, category_id, created_at, updated_at) VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", (id, name, category_id))
+    return id
 
-
-def getSubCategory(id, name):
-     print( f"id: {id} i la subcategoria: {name}")
+def get_or_update_product(conn, id, name, description, company, price, units, subcategory_id):
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM product WHERE product_id = %s", (id,))
+    existing_product = cur.fetchone()
+    if existing_product:
+        cur.execute("UPDATE product SET name = %s, description = %s, company = %s, price = %s, units = %s, subcategory_id = %s, updated_at = CURRENT_TIMESTAMP WHERE product_id = %s", (name, description, company, price, units, subcategory_id, id))
+    else:
+        cur.execute("INSERT INTO product(product_id, name, description, company, price, units, subcategory_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", (id, name, description, company, price, units, subcategory_id))
+    return id
