@@ -6,7 +6,7 @@ def consulta():
         conn = clientPS.client()
         cur = conn.cursor()
         cur.execute("SELECT * FROM product")
-        data = cur.fetchone()
+        data = cur.fetchall()
     except Exception as e:
         print(f"Failed to connect: {e}")
         return None
